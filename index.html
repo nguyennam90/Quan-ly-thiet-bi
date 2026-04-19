@@ -1,26 +1,95 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head>
-<meta charset="utf-8">
-<title>Kiểm tra thiết bị</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Khai báo thông tin thiết bị</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, sans-serif; background-color: #f4f7f6; padding: 20px; display: flex; justify-content: center; }
+    .container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 400px; width: 100%; }
+    h2 { text-align: center; color: #333; margin-bottom: 20px; font-size: 22px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; font-size: 14px; }
+    input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
+    button { width: 100%; padding: 14px; background-color: #0056b3; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    button:hover { background-color: #004494; }
+    .loader { border: 4px solid #f3f3f3; border-top: 4px solid #0056b3; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; display: none;}
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    #message { text-align: center; display: none; font-size: 16px; color: #28a745; margin-top: 20px;}
+  </style>
 </head>
 <body>
-Đang kiểm tra thiết bị...
+  <div class="container">
+    <h2>Khai báo thiết bị</h2>
+    <form id="deviceForm">
+      <div class="form-group">
+        <label for="fullName">Họ và tên:</label>
+        <input type="text" id="fullName" required>
+      </div>
+      <div class="form-group">
+        <label for="phone">Số điện thoại:</label>
+        <input type="tel" id="phone" required pattern="[0-9]{10,11}">
+      </div>
+      <div class="form-group">
+        <label for="postmanCode">Mã bưu tá:</label>
+        <input type="text" id="postmanCode" required>
+      </div>
+      <button type="submit" id="submitBtn">Gửi thông tin</button>
+    </form>
+    
+    <div class="loader" id="spinner"></div>
+    <div id="message"></div>
+  </div>
 
-<script>
-var ua = navigator.userAgent;
+  <script>
+    // DÁN URL CỦA APPS SCRIPT VÀO ĐÂY (NẰM TRONG CẶP DẤU NHÁY ĐƠN)
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzTX6y8Af8fZ6jNcKcPrHH8xamo91tn_omXPKVRZM_-GtMKpy3psU4dFzNu-ohPHcxt/exec'; 
 
-fetch("https://script.googleusercontent.com/macros/echo?user_content_key=AWDtjMXMI0_p0u_UTL6p-4nKZK1v55AZ_gwMwn_Ov8mRK3PDluvbTNXQ7coBfvBI-FeIB4njSKkXFDr2A8FD_pFXSPN3Aeca54R8TxxE17p_T3A6VL-GKxiXQgV3F9XWg0C9CuYJ8ipgMQBBskxrP5-X-Hfsy8PoaihLsw9-xOTfpUwyjo5dEt4bf8A0LNbjMGuLMir45n72hvtzYsmeVZaidVYzPMZiB8tUDIND44V8m4lL8-4itj1dGmQ01s0oVu64Ulc7g3vva86kMkjagkRwcFr7YJArqVOp2ypDbn1R&lib=MhxIF_2qtumYH_MFQjMC8EJMYprHmXMrb?ua=" + encodeURIComponent(ua))
-.then(response => response.text())
-.then(data => {
-    console.log("Đã ghi:", data);
-    window.location.href = "https://docs.google.com/forms/d/e/1FAIpQLSejopJr6gWP_amEDpxxa9Oq_jvUYiNBB7KOGNj2gPqgCTDQfw/viewform?usp=publish-editor";
-})
-.catch(err => {
-    console.log(err);
-    window.location.href = "https://docs.google.com/forms/d/e/1FAIpQLSejopJr6gWP_amEDpxxa9Oq_jvUYiNBB7KOGNj2gPqgCTDQfw/viewform?usp=publish-editor";
-});
-</script>
+    function detectOS() {
+      var userAgent = window.navigator.userAgent || window.navigator.vendor || window.opera;
+      if (/android/i.test(userAgent)) {
+          var match = userAgent.match(/Android\s([0-9\.]*)/);
+          return match ? "Android " + match[1] : "Android";
+      }
+      if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+          var match = userAgent.match(/OS (\d+)_(\d+)_?(\d+)?/);
+          return match ? "iOS " + match[1] + "." + match[2] : "iOS";
+      }
+      return "Unknown OS";
+    }
 
+    document.getElementById('deviceForm').addEventListener('submit', function(e) {
+      e.preventDefault(); 
+      
+      document.getElementById('submitBtn').style.display = 'none';
+      document.getElementById('spinner').style.display = 'block';
+
+      // Tạo FormData để đóng gói dữ liệu (tránh lỗi CORS Policy của trình duyệt)
+      var formData = new FormData();
+      formData.append('fullName', document.getElementById('fullName').value);
+      formData.append('phone', document.getElementById('phone').value);
+      formData.append('postmanCode', document.getElementById('postmanCode').value);
+      formData.append('osName', detectOS());
+      formData.append('userAgent', window.navigator.userAgent);
+
+      // Dùng Fetch API để gọi sang Server Google
+      fetch(API_URL, {
+          method: 'POST',
+          body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+          document.getElementById('spinner').style.display = 'none';
+          document.getElementById('deviceForm').style.display = 'none';
+          document.getElementById('message').innerHTML = "✅<br><br>Cập nhật thông tin thành công!";
+          document.getElementById('message').style.display = 'block';
+      })
+      .catch(error => {
+          document.getElementById('spinner').style.display = 'none';
+          document.getElementById('submitBtn').style.display = 'block';
+          alert("Lỗi mạng! Không thể gửi dữ liệu.");
+      });
+    });
+  </script>
 </body>
 </html>
