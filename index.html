@@ -37,6 +37,10 @@
         <label for="postmanCode">Mã bưu tá (VD:48A...):</label>
         <input type="text" id="postmanCode" required>
       </div>
+      <div class="form-group">
+        <label for="modelphone">Tên điện thoai (SamSung, Xiaomi):</label>
+        <input type="text" id="Modelphone" required>
+      </div>
       <button type="submit" id="submitBtn">Gửi thông tin</button>
     </form>
     
@@ -72,6 +76,7 @@
       formData.append('fullName', document.getElementById('fullName').value);
       formData.append('phone', document.getElementById('phone').value);
       formData.append('postmanCode', document.getElementById('postmanCode').value);
+      formData.append('modelphone', document.getElementById('modelphone').value);
       formData.append('osName', detectOS());
       formData.append('userAgent', window.navigator.userAgent);
 
