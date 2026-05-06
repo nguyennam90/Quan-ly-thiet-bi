@@ -61,7 +61,6 @@
   <script>
     /**
      * CONFIGURATION
-     * Yêu cầu: Khai báo API Endpoint từ Google Apps Script
      */
     const API_URL = 'https://script.google.com/macros/s/AKfycbyfTel3lLkOaN3mohTjehjupuV2FYRXDeltNWMb2TiimbqrPCSn4SONFrD_ysHcPxs6/exec'; 
 
@@ -82,72 +81,107 @@
     }
 
     /**
-     * MODULE: Trích xuất Thông tin Phần cứng (Hardware Fingerprinting)
+     * HELPER: Ánh xạ mã Model sang Thương hiệu tương ứng
      */
-    function getDeviceHardware() {
-      var ua = window.navigator.userAgent;
-      var brand = "Unknown", model = "Unknown";
+    function guessBrandFromModel(model) {
+        let m = model.toUpperCase();
+        if (m.includes('SM-') || m.includes('SAMSUNG') || m.includes('GT-')) return "Samsung";
+        if (m.includes('CPH') || m.includes('OPPO') || m.includes('PDK')) return "Oppo";
+        if (m.includes('RMX') || m.includes('REALME')) return "Realme";
+        if (m.includes('REDMI') || m.includes('MI ') || m.includes('POCO') || /^2[123]/.test(m)) return "Xiaomi";
+        if (/^V\d{4}/.test(m) || m.includes('VIVO')) return "Vivo";
+        if (m.includes('PIXEL')) return "Google";
+        return "Android Device";
+    }
 
-      if (/iPhone/i.test(ua)) { brand = "Apple"; model = "iPhone"; } 
-      else if (/iPad/i.test(ua)) { brand = "Apple"; model = "iPad"; } 
-      else if (/Android/i.test(ua)) {
-          var match = ua.match(/Android.*?; (.*?) Build/);
-          if (match) {
-              model = match[1].trim();
-              if (/SM-|GT-|SAMSUNG/i.test(model)) brand = "Samsung";
-              else if (/CPH|Oppo/i.test(model)) brand = "Oppo";
-              else if (/Redmi|Mi|POCO/i.test(model)) brand = "Xiaomi";
-              else if (/V[0-9]{4}|Vivo/i.test(model)) brand = "Vivo";
-              else if (/RMX/i.test(model)) brand = "Realme";
-              else brand = "Android Device";
+    /**
+     * MODULE: Trích xuất Thông tin Phần cứng (Asynchronous Client Hints + Regex Fallback)
+     */
+    async function getDeviceHardware() {
+      let brand = "Unknown";
+      let model = "Unknown";
+      const ua = window.navigator.userAgent;
+
+      // Xử lý Apple (Không đổi vì Apple bị khóa Client Hints)
+      if (/iPhone/i.test(ua)) return { brand: "Apple", model: "iPhone" };
+      if (/iPad/i.test(ua)) return { brand: "Apple", model: "iPad" };
+
+      // Xử lý Android: Lớp 1 - Sử dụng Client Hints API (Trình duyệt hiện đại)
+      if (navigator.userAgentData) {
+          try {
+              const hints = await navigator.userAgentData.getHighEntropyValues(['model']);
+              if (hints.model) {
+                  model = hints.model;
+                  brand = guessBrandFromModel(model);
+                  return { brand: brand, model: model };
+              }
+          } catch (e) {
+              console.warn("Client Hints API bị từ chối truy cập.");
           }
       }
+
+      // Xử lý Android: Lớp 2 - Fallback Regex linh hoạt hơn
+      if (/Android/i.test(ua)) {
+          // Bắt mọi ký tự nằm giữa 'Android [version];' và 'Build' hoặc dấu ngoặc đóng ')'
+          let match = ua.match(/Android[^;]+;\s*([^;]+?)(?:\s*Build\/|\))/i);
+          if (match) {
+              model = match[1].trim();
+              // Loại trừ các giá trị rác như "wv" (WebView) hoặc ngôn ngữ (vi-VN)
+              if (model === "wv" || model === "K" || model.length < 3) {
+                  model = "Unknown Model";
+              } else {
+                  brand = guessBrandFromModel(model);
+              }
+          } else {
+              brand = "Android Device";
+          }
+      }
+
       return { brand: brand, model: model };
     }
 
     /**
-     * CONTROLLER: Xử lý sự kiện Submit & API Call
+     * CONTROLLER: Xử lý sự kiện Submit (Chuyển sang Async/Await)
      */
-    document.getElementById('deviceForm').addEventListener('submit', function(e) {
-      e.preventDefault(); // Ngăn chặn hành vi reload mặc định của form
+    document.getElementById('deviceForm').addEventListener('submit', async function(e) {
+      e.preventDefault(); 
       
-      // Cập nhật UI state (Loading)
+      // Khóa UI & Hiển thị Loading
       document.getElementById('submitBtn').style.display = 'none';
       document.getElementById('spinner').style.display = 'block';
 
-      // Xây dựng Data Payload
-      var formData = new FormData();
-      formData.append('fullName', document.getElementById('fullName').value);
-      formData.append('phone', document.getElementById('phone').value);
-      formData.append('postmanCode', document.getElementById('postmanCode').value);
-      
-      // Tích hợp dữ liệu tự động
-      formData.append('osName', detectOS());
-      formData.append('userAgent', window.navigator.userAgent);
-      var hardwareInfo = getDeviceHardware();
-      formData.append('deviceBrand', hardwareInfo.brand);
-      formData.append('deviceModel', hardwareInfo.model);
+      try {
+          var formData = new FormData();
+          formData.append('fullName', document.getElementById('fullName').value);
+          formData.append('phone', document.getElementById('phone').value);
+          formData.append('postmanCode', document.getElementById('postmanCode').value);
+          
+          formData.append('osName', detectOS());
+          formData.append('userAgent', window.navigator.userAgent);
+          
+          // Chờ lấy thông tin phần cứng (Bắt buộc dùng await vì hàm getDeviceHardware đã là async)
+          var hardwareInfo = await getDeviceHardware();
+          formData.append('deviceBrand', hardwareInfo.brand);
+          formData.append('deviceModel', hardwareInfo.model);
 
-      // Thực thi HTTP POST Request
-      fetch(API_URL, {
-          method: 'POST',
-          body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-          // Xử lý thành công
-          document.getElementById('spinner').style.display = 'none';
-          document.getElementById('deviceForm').style.display = 'none';
-          document.getElementById('message').innerHTML = "✅<br><br>Cập nhật thông tin thiết bị thành công!";
-          document.getElementById('message').style.display = 'block';
-      })
-      .catch(error => {
-          // Xử lý ngoại lệ mạng
+          // Gửi API
+          const response = await fetch(API_URL, { method: 'POST', body: formData });
+          const data = await response.json();
+
+          if (data.result === "success") {
+              document.getElementById('spinner').style.display = 'none';
+              document.getElementById('deviceForm').style.display = 'none';
+              document.getElementById('message').innerHTML = "✅<br><br>Cập nhật thông tin thiết bị thành công!";
+              document.getElementById('message').style.display = 'block';
+          } else {
+              throw new Error("Backend báo lỗi");
+          }
+      } catch (error) {
           document.getElementById('spinner').style.display = 'none';
           document.getElementById('submitBtn').style.display = 'block';
           alert("Lỗi kết nối API! Vui lòng kiểm tra lại mạng.");
-          console.error('System Log:', error); // Log lỗi ra console để debug
-      });
+          console.error('System Log:', error);
+      }
     });
   </script>
 </body>
